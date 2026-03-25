@@ -392,21 +392,482 @@ phase1_interview() {
 }
 
 # ============================================================
-# Phase 2: Generate (placeholder)
+# Phase 2: Generate
 # ============================================================
+
+# --- Remote Template Download ---
+download_templates() {
+  echo "テンプレートをダウンロード中..."
+  local files=(
+    "templates/settings.json.base"
+    "templates/claude-md/header.md"
+    "templates/claude-md/base-rules.md"
+    "templates/claude-md/verification.md"
+    "templates/claude-md/stack-nextjs.md"
+    "templates/claude-md/stack-react-native.md"
+    "templates/claude-md/stack-vue.md"
+    "templates/claude-md/stack-python.md"
+    "templates/claude-md/stack-rails.md"
+    "templates/claude-md/stack-go.md"
+    "templates/claude-md/stack-swift.md"
+    "templates/claude-md/stack-flutter.md"
+    "templates/claude-md/db-supabase.md"
+    "templates/claude-md/db-firebase.md"
+    "templates/claude-md/db-postgres.md"
+    "templates/claude-md/workflow-solo.md"
+    "templates/claude-md/workflow-lead.md"
+    "templates/claude-md/workflow-member.md"
+    "templates/claude-md/workflow-non-eng.md"
+    "templates/agents/code-reviewer.md"
+    "templates/agents/debugger.md"
+    "templates/agents/test-writer.md"
+    "templates/agents/security-reviewer.md"
+    "templates/agents/typescript-reviewer.md"
+    "templates/agents/architect.md"
+    "templates/rules/dev-workflow.md"
+    "templates/rules/agent-team.md"
+    "templates/rules/codex.md"
+    "templates/hooks/session-start.sh"
+    "templates/hooks/block-no-verify.sh"
+    "templates/hooks/block-config-edit.sh"
+    "templates/hooks/block-unnecessary-docs.sh"
+    "templates/hooks/auto-format.sh"
+    "templates/hooks/typecheck.sh"
+    "templates/hooks/console-log-check.sh"
+    "templates/hooks/pre-compact.sh"
+    "templates/hooks/stop-console-check.sh"
+    "templates/hooks/subagent-quality.sh"
+    "templates/examples/pipeline-content.md"
+    "templates/examples/pipeline-feature.md"
+    "plugins.txt"
+    "merge-settings.sh"
+  )
+  for f in "${files[@]}"; do
+    mkdir -p "$SCRIPT_DIR/$(dirname "$f")"
+    curl -sL "$REPO_URL/$f" -o "$SCRIPT_DIR/$f" || warn "Failed to download $f"
+  done
+  info "テンプレートダウンロード完了"
+}
+
+# --- CLAUDE.md Generation ---
+generate_claude_md() {
+  local output="$1"
+
+  # Header with variable substitution
+  local role_label role_desc
+  case "$ROLE" in
+    solo)    role_label="経営者 兼 エンジニア"; role_desc="ソロ開発（Claude Codeがシニアエンジニア役）。提案・指摘は積極的にしろ。黙って従うな。品質重視。" ;;
+    lead)    role_label="テックリード"; role_desc="チーム開発。サブエージェントを管理し、品質ゲートで品質を担保する。" ;;
+    member)  role_label="エンジニア"; role_desc="チームメンバー。割り当てられたタスクに集中する。" ;;
+    non-eng) role_label="AI活用担当"; role_desc="非エンジニア。Claude Codeを使って業務を効率化する。" ;;
+  esac
+
+  # Build tech stack list
+  local stack_list=""
+  IFS=',' read -ra stacks <<< "$STACKS"
+  for s in "${stacks[@]}"; do
+    case "$s" in
+      nextjs) stack_list="$stack_list Next.js / React /" ;;
+      react-native) stack_list="$stack_list React Native (Expo) /" ;;
+      vue) stack_list="$stack_list Vue / Nuxt /" ;;
+      python) stack_list="$stack_list Python /" ;;
+      rails) stack_list="$stack_list Ruby on Rails /" ;;
+      go) stack_list="$stack_list Go /" ;;
+      swift) stack_list="$stack_list Swift / iOS /" ;;
+      flutter) stack_list="$stack_list Flutter /" ;;
+      other) stack_list="$stack_list その他 /" ;;
+    esac
+  done
+  # Add DB
+  case "$DB" in
+    supabase) stack_list="$stack_list Supabase /" ;;
+    firebase) stack_list="$stack_list Firebase /" ;;
+    postgres) stack_list="$stack_list PostgreSQL /" ;;
+    aws) stack_list="$stack_list AWS /" ;;
+    mysql) stack_list="$stack_list MySQL /" ;;
+  esac
+  stack_list=$(echo "$stack_list" | sed 's/ \/$//' | sed 's/^ //')
+
+  # Write header
+  sed -e "s/{{USER_NAME}}/$USER_NAME/g" \
+      -e "s/{{COMPANY_NAME}}/$COMPANY_NAME/g" \
+      -e "s/{{ROLE_LABEL}}/$role_label/g" \
+      -e "s|{{ROLE_DESCRIPTION}}|$role_desc|g" \
+      -e "s|{{TECH_STACK_LIST}}|$stack_list|g" \
+      "$TEMPLATE_DIR/claude-md/header.md" > "$output"
+
+  echo "" >> "$output"
+  echo "---" >> "$output"
+  echo "" >> "$output"
+
+  # Base rules with PKG_MANAGER substitution
+  sed "s/{{PKG_MANAGER}}/$PKG_MANAGER/g" "$TEMPLATE_DIR/claude-md/base-rules.md" >> "$output"
+
+  # Stack-specific rules
+  for s in "${stacks[@]}"; do
+    local stack_file="$TEMPLATE_DIR/claude-md/stack-${s}.md"
+    if [ -f "$stack_file" ]; then
+      cat "$stack_file" >> "$output"
+    fi
+  done
+
+  # DB-specific rules
+  local db_file="$TEMPLATE_DIR/claude-md/db-${DB}.md"
+  if [ -f "$db_file" ]; then
+    cat "$db_file" >> "$output"
+  fi
+
+  # Workflow
+  local wf_file="$TEMPLATE_DIR/claude-md/workflow-${ROLE}.md"
+  if [ -f "$wf_file" ]; then
+    echo "" >> "$output"
+    echo "---" >> "$output"
+    cat "$wf_file" >> "$output"
+  fi
+
+  # Verification commands
+  echo "" >> "$output"
+  echo "---" >> "$output"
+  echo "" >> "$output"
+  generate_verification >> "$output"
+}
+
+generate_verification() {
+  echo "# 検証コマンド"
+  echo ""
+  echo "コード変更後は必ず該当する検証を実行しろ:"
+
+  IFS=',' read -ra stacks <<< "$STACKS"
+  for s in "${stacks[@]}"; do
+    case "$s" in
+      nextjs)
+        echo "- 型チェック: \`$PKG_MANAGER tsc --noEmit\`"
+        echo "- リント: \`$PKG_MANAGER lint\`"
+        echo "- テスト: \`$PKG_MANAGER test\`"
+        echo "- ビルド: \`$PKG_MANAGER build\`"
+        ;;
+      react-native)
+        echo "- 型チェック: \`$PKG_MANAGER tsc --noEmit\`"
+        echo "- リント: \`$PKG_MANAGER lint\`"
+        echo "- Expo: \`npx expo doctor\`"
+        ;;
+      vue)
+        echo "- 型チェック: \`$PKG_MANAGER tsc --noEmit\`"
+        echo "- リント: \`$PKG_MANAGER lint\`"
+        echo "- テスト: \`$PKG_MANAGER test\`"
+        ;;
+      python)
+        echo "- リント: \`ruff check .\`"
+        echo "- 型チェック: \`mypy .\`"
+        echo "- テスト: \`pytest\`"
+        ;;
+      rails)
+        echo "- リント: \`bundle exec rubocop\`"
+        echo "- テスト: \`bundle exec rspec\`"
+        ;;
+      go)
+        echo "- Vet: \`go vet ./...\`"
+        echo "- テスト: \`go test ./...\`"
+        echo "- リント: \`golangci-lint run\`"
+        ;;
+      swift)
+        echo "- ビルド: \`swift build\`"
+        echo "- テスト: \`swift test\`"
+        ;;
+      flutter)
+        echo "- 解析: \`flutter analyze\`"
+        echo "- テスト: \`flutter test\`"
+        ;;
+    esac
+  done
+
+  case "$DB" in
+    supabase) echo "- DB: \`npx supabase db lint\`" ;;
+  esac
+}
+
+# --- settings.json Generation ---
+has_typescript_stack() {
+  [[ "$STACKS" =~ nextjs|react-native|vue ]]
+}
+
+generate_settings_json() {
+  local output="$1"
+  cp "$TEMPLATE_DIR/settings.json.base" "$output"
+
+  # Remove TypeScript hooks if no TS stack
+  if ! has_typescript_stack; then
+    jq 'del(.hooks.PostToolUse[] | select(.description | test("TypeScript|Prettier")))' \
+      "$output" > "${output}.tmp" && mv "${output}.tmp" "$output"
+  fi
+
+  # Remove SubagentStop if no team
+  if [ "$USE_TEAM" != "yes" ]; then
+    jq 'del(.hooks.SubagentStop)' "$output" > "${output}.tmp" && mv "${output}.tmp" "$output"
+  fi
+}
+
+# --- Agent/Rules Selection ---
+SELECTED_AGENTS=()
+SELECTED_RULES=()
+
+select_agents() {
+  SELECTED_AGENTS=("code-reviewer.md" "debugger.md" "test-writer.md" "security-reviewer.md")
+
+  if has_typescript_stack; then
+    SELECTED_AGENTS+=("typescript-reviewer.md")
+  fi
+
+  if [ "$USE_TEAM" = "yes" ]; then
+    SELECTED_AGENTS+=("architect.md")
+  fi
+}
+
+select_rules() {
+  SELECTED_RULES=("dev-workflow.md")
+
+  if [ "$USE_TEAM" = "yes" ]; then
+    SELECTED_RULES+=("agent-team.md")
+  fi
+
+  if [ "$USE_CODEX" = "yes" ]; then
+    SELECTED_RULES+=("codex.md")
+  fi
+}
 
 phase2_generate() {
   header "設定生成"
-  warn "Phase 2: 未実装 — 次のタスクで追加"
+
+  # Download templates if running from remote
+  if [ "$SOURCE" = "remote" ]; then
+    download_templates
+  fi
+
+  GENERATED_DIR=$(mktemp -d)
+
+  # Generate CLAUDE.md
+  generate_claude_md "$GENERATED_DIR/CLAUDE.md"
+  info "CLAUDE.md 生成完了"
+
+  # Generate settings.json
+  generate_settings_json "$GENERATED_DIR/settings.json"
+  info "settings.json 生成完了"
+
+  # Determine which agents to include
+  select_agents
+  info "agents ${#SELECTED_AGENTS[@]}体 選択完了"
+
+  # Determine which rules to include
+  select_rules
+  info "rules ${#SELECTED_RULES[@]}つ 選択完了"
+
+  if [ "$DRY_RUN" = true ]; then
+    echo ""
+    warn "DRY RUN: 生成された CLAUDE.md:"
+    echo "---"
+    cat "$GENERATED_DIR/CLAUDE.md"
+    echo "---"
+  fi
 }
 
 # ============================================================
-# Phase 3: Install (placeholder)
+# Phase 3: Install
 # ============================================================
+
+# --- Backup ---
+backup_existing() {
+  local backup_dir="$HOME/.claude/backups"
+  mkdir -p "$backup_dir"
+  local timestamp
+  timestamp=$(date +%Y%m%d-%H%M%S)
+
+  if [ -f "$HOME/.claude/settings.json" ]; then
+    cp "$HOME/.claude/settings.json" "$backup_dir/settings.json.$timestamp"
+    info "settings.json バックアップ完了"
+  fi
+
+  # Keep only last 5 backups
+  ls -t "$backup_dir"/settings.json.* 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+}
+
+# --- Install CLAUDE.md ---
+install_claude_md() {
+  if [ -f "$HOME/CLAUDE.md" ]; then
+    cp "$GENERATED_DIR/CLAUDE.md" /tmp/claude-kickstart-preview-CLAUDE.md
+    echo ""
+    echo "既存の ~/CLAUDE.md が見つかりました。"
+    echo "差分:"
+    diff "$HOME/CLAUDE.md" /tmp/claude-kickstart-preview-CLAUDE.md || true
+    echo ""
+    echo "  1) 上書き"
+    echo "  2) スキップ"
+    echo "  3) バックアップして上書き"
+    echo -en "選択 [2]: "
+    read -r choice
+    choice=${choice:-2}
+    case "$choice" in
+      1) cp "$GENERATED_DIR/CLAUDE.md" "$HOME/CLAUDE.md"; info "~/CLAUDE.md 上書き完了" ;;
+      3) cp "$HOME/CLAUDE.md" "$HOME/CLAUDE.md.backup"; cp "$GENERATED_DIR/CLAUDE.md" "$HOME/CLAUDE.md"; info "~/CLAUDE.md バックアップ&上書き完了" ;;
+      *) warn "~/CLAUDE.md スキップ" ;;
+    esac
+  else
+    cp "$GENERATED_DIR/CLAUDE.md" "$HOME/CLAUDE.md"
+    info "~/CLAUDE.md 生成完了"
+  fi
+}
+
+# --- Install settings.json ---
+install_settings_json() {
+  mkdir -p "$HOME/.claude"
+
+  if [ -f "$HOME/.claude/settings.json" ]; then
+    # Merge using merge-settings.sh
+    local merge_script="$SCRIPT_DIR/merge-settings.sh"
+    if [ -f "$merge_script" ]; then
+      bash "$merge_script" "$HOME/.claude/settings.json" "$GENERATED_DIR/settings.json" > /tmp/kickstart-merged.json
+      mv /tmp/kickstart-merged.json "$HOME/.claude/settings.json"
+      info "settings.json マージ完了"
+    else
+      warn "merge-settings.sh が見つかりません。上書きします"
+      cp "$GENERATED_DIR/settings.json" "$HOME/.claude/settings.json"
+    fi
+  else
+    cp "$GENERATED_DIR/settings.json" "$HOME/.claude/settings.json"
+    info "settings.json 生成完了"
+  fi
+}
+
+# --- Install Agents ---
+install_agents() {
+  mkdir -p "$HOME/.claude/agents"
+  local count=0
+  for agent in "${SELECTED_AGENTS[@]}"; do
+    if [ -f "$HOME/.claude/agents/$agent" ]; then
+      echo -en "  $agent は既に存在します。上書きしますか？ (y/N): "
+      read -r overwrite
+      if [[ ! "$overwrite" =~ ^[Yy] ]]; then
+        continue
+      fi
+    fi
+    cp "$TEMPLATE_DIR/agents/$agent" "$HOME/.claude/agents/$agent"
+    ((count++))
+  done
+  info "agents ${count}体 配置完了"
+}
+
+# --- Install Rules ---
+install_rules() {
+  mkdir -p "$HOME/.claude/rules"
+  local count=0
+  for rule in "${SELECTED_RULES[@]}"; do
+    if [ -f "$HOME/.claude/rules/$rule" ]; then
+      echo -en "  $rule は既に存在します。上書きしますか？ (y/N): "
+      read -r overwrite
+      if [[ ! "$overwrite" =~ ^[Yy] ]]; then
+        continue
+      fi
+    fi
+    cp "$TEMPLATE_DIR/rules/$rule" "$HOME/.claude/rules/$rule"
+    ((count++))
+  done
+  info "rules ${count}つ 配置完了"
+}
+
+# --- Install Hooks ---
+install_hooks() {
+  mkdir -p "$HOME/.claude/hooks"
+  for hook in "$TEMPLATE_DIR"/hooks/*.sh; do
+    local basename
+    basename=$(basename "$hook")
+    cp "$hook" "$HOME/.claude/hooks/$basename"
+    chmod +x "$HOME/.claude/hooks/$basename"
+  done
+  info "hooks 配置完了"
+}
+
+# --- Install Examples ---
+install_examples() {
+  mkdir -p "$HOME/.claude/examples"
+  for example in "$TEMPLATE_DIR"/examples/*.md; do
+    local basename
+    basename=$(basename "$example")
+    cp "$example" "$HOME/.claude/examples/$basename"
+  done
+  info "examples 配置完了"
+}
+
+# --- Install Plugins ---
+install_plugins() {
+  echo ""
+  echo -e "${BOLD}プラグインインストール...${NC}"
+  local plugins_file="$SCRIPT_DIR/plugins.txt"
+  if [ ! -f "$plugins_file" ]; then
+    warn "plugins.txt が見つかりません。スキップ"
+    return
+  fi
+  while IFS= read -r plugin || [ -n "$plugin" ]; do
+    [ -z "$plugin" ] && continue
+    echo -e "  ${BLUE}→${NC} $plugin"
+    claude plugin add "$plugin" 2>/dev/null && info "$plugin" || warn "$plugin (スキップ)"
+  done < "$plugins_file"
+}
+
+# --- Install AgentShield ---
+install_agentshield() {
+  echo ""
+  if npm list -g ecc-agentshield >/dev/null 2>&1; then
+    info "AgentShield 既にインストール済み"
+  else
+    echo -e "  ${BLUE}→${NC} AgentShield インストール中..."
+    npm install -g ecc-agentshield 2>/dev/null && info "AgentShield インストール完了" || warn "AgentShield インストールスキップ"
+  fi
+
+  # Run security scan
+  if command -v npx >/dev/null 2>&1; then
+    echo ""
+    echo -e "${BOLD}セキュリティスキャン...${NC}"
+    npx ecc-agentshield scan --path "$HOME/.claude" 2>&1 | grep -E "^  Grade:" | head -1 || warn "スキャンスキップ"
+  fi
+}
 
 phase3_install() {
   header "インストール"
-  warn "Phase 3: 未実装 — 次のタスクで追加"
+
+  if [ "$DRY_RUN" = true ]; then
+    warn "DRY RUN: ファイルは書き込まれません"
+    echo "  生成される agents: ${SELECTED_AGENTS[*]}"
+    echo "  生成される rules: ${SELECTED_RULES[*]}"
+    return
+  fi
+
+  # Backup
+  backup_existing
+
+  # Install CLAUDE.md
+  install_claude_md
+
+  # Install settings.json
+  install_settings_json
+
+  # Install agents
+  install_agents
+
+  # Install rules
+  install_rules
+
+  # Install hooks
+  install_hooks
+
+  # Install examples (only for team users)
+  if [ "$USE_TEAM" = "yes" ]; then
+    install_examples
+  fi
+
+  # Install plugins
+  install_plugins
+
+  # Install AgentShield
+  install_agentshield
 }
 
 # ============================================================
