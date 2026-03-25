@@ -876,7 +876,82 @@ phase3_install() {
 
 phase4_summary() {
   header "セットアップ完了"
-  warn "Phase 4: 未実装 — 次のタスクで追加"
+
+  echo -e "${BOLD}あなたの環境:${NC}"
+  echo "  名前: $USER_NAME"
+  echo "  会社: $COMPANY_NAME"
+
+  local role_display
+  case "$ROLE" in
+    solo)    role_display="経営者 兼 エンジニア（ソロ開発）" ;;
+    lead)    role_display="テックリード（チームあり）" ;;
+    member)  role_display="エンジニア（メンバー）" ;;
+    non-eng) role_display="非エンジニア（AI活用）" ;;
+  esac
+  echo "  役割: $role_display"
+
+  # Display stacks
+  local stack_display=""
+  IFS=',' read -ra stacks <<< "$STACKS"
+  for s in "${stacks[@]}"; do
+    case "$s" in
+      nextjs) stack_display="$stack_display, Next.js" ;;
+      react-native) stack_display="$stack_display, React Native" ;;
+      vue) stack_display="$stack_display, Vue/Nuxt" ;;
+      python) stack_display="$stack_display, Python" ;;
+      rails) stack_display="$stack_display, Rails" ;;
+      go) stack_display="$stack_display, Go" ;;
+      swift) stack_display="$stack_display, Swift" ;;
+      flutter) stack_display="$stack_display, Flutter" ;;
+      other) stack_display="$stack_display, その他" ;;
+    esac
+  done
+  stack_display=$(echo "$stack_display" | sed 's/^, //')
+  echo "  スタック: $stack_display"
+
+  local db_display
+  case "$DB" in
+    supabase) db_display="Supabase" ;;
+    firebase) db_display="Firebase" ;;
+    postgres) db_display="PostgreSQL" ;;
+    aws)      db_display="AWS" ;;
+    mysql)    db_display="MySQL" ;;
+    other)    db_display="その他" ;;
+  esac
+  echo "  DB: $db_display"
+  echo "  パッケージマネージャ: $PKG_MANAGER"
+
+  echo ""
+  echo -e "${BOLD}生成されたファイル:${NC}"
+  echo "  ~/CLAUDE.md              ← プロジェクト共通ルール"
+  echo "  ~/.claude/settings.json  ← hooks, permissions, deny list"
+  echo "  ~/.claude/agents/        ← AIエージェント定義 (${#SELECTED_AGENTS[@]}体)"
+  echo "  ~/.claude/rules/         ← ワークフロールール (${#SELECTED_RULES[@]}つ)"
+  echo "  ~/.claude/hooks/         ← 自動化hookスクリプト"
+
+  if [ "$USE_TEAM" = "yes" ]; then
+    echo "  ~/.claude/examples/      ← パイプラインパターン例"
+  fi
+
+  echo ""
+  echo -e "${BOLD}次のステップ:${NC}"
+  echo "  1. ~/CLAUDE.md を開いて内容を確認・調整してください"
+  echo "  2. プロジェクトディレクトリに移動して ${BLUE}claude${NC} と起動"
+  echo "  3. 「何か聞いてみて」ください"
+
+  if [[ "$STACKS" =~ other ]]; then
+    echo ""
+    warn "「その他」のスタックを選択しました。~/CLAUDE.md にスタック固有のルールを手動で追加してください"
+  fi
+
+  if [[ "$DB" = "other" ]]; then
+    warn "「その他」のDBを選択しました。~/CLAUDE.md にDB固有のルールを手動で追加してください"
+  fi
+
+  echo ""
+  echo -e "${BOLD}ドキュメント:${NC}"
+  echo "  https://github.com/crdl-co/claude-kickstart"
+  echo ""
 }
 
 # ============================================================
