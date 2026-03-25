@@ -4,29 +4,57 @@ Claude Code環境を対話式ヒアリングでパーソナライズし、ワン
 
 中小スタートアップ向け。「これ入れて」の一言で、最適化されたAIエージェント開発環境が完成する。
 
-## インストール
+## インストール（コマンド一発）
 
-### ワンライナー（簡易）
+何も入ってない状態から、コマンド一発でClaude Code環境が完成する。
 
-```bash
-curl -sL https://raw.githubusercontent.com/crdl-co/claude-kickstart/main/install.sh | bash
+### Windows（PowerShell）
+
+```powershell
+winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements; refreshenv; npx claude-kickstart
 ```
 
-### 安全な実行方法（推奨）
+### Mac
 
 ```bash
-curl -sL https://raw.githubusercontent.com/crdl-co/claude-kickstart/main/install.sh -o install.sh
-curl -sL https://raw.githubusercontent.com/crdl-co/claude-kickstart/main/checksums.txt -o checksums.txt
-shasum -a 256 -c checksums.txt && bash install.sh
+brew install node; npx claude-kickstart
 ```
 
-### ローカルから実行
+> Homebrew未インストールの場合は先に: `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
+
+### Linux（Ubuntu/Debian）
 
 ```bash
-git clone https://github.com/crdl-co/claude-kickstart.git
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash - && sudo apt install -y nodejs && npx claude-kickstart
+```
+
+### Node.jsが既に入っている場合
+
+```
+npx claude-kickstart
+```
+
+これだけ。Windows/Mac/Linux全対応。
+
+### その他の実行方法
+
+<details>
+<summary>bash版（Mac/Linux）</summary>
+
+```bash
+curl -sL https://raw.githubusercontent.com/cradle-team/claude-kickstart/main/install.sh | bash
+```
+</details>
+
+<details>
+<summary>ローカルから実行</summary>
+
+```bash
+git clone https://github.com/cradle-team/claude-kickstart.git
 cd claude-kickstart
 bash install.sh
 ```
+</details>
 
 ## 何がインストールされるか
 
