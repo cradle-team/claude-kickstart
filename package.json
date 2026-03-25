@@ -1,0 +1,23 @@
+{
+  "name": "claude-kickstart",
+  "version": "1.0.0",
+  "description": "Claude Code環境を対話式ヒアリングでパーソナライズし、ワンライナーでセットアップするインストーラー",
+  "bin": {
+    "claude-kickstart": "./bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "templates/"
+  ],
+  "keywords": ["claude", "claude-code", "ai", "setup", "installer"],
+  "author": "Cradle Inc. <info@crdl.co.jp>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cradle-team/claude-kickstart.git"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
