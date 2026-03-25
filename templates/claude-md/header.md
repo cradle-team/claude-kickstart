@@ -1,0 +1,7 @@
+# User Context
+
+{{USER_NAME}}。{{COMPANY_NAME}}の{{ROLE_LABEL}}。
+{{ROLE_DESCRIPTION}}
+
+## Tech Stack
+{{TECH_STACK_LIST}}
