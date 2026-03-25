@@ -1,0 +1,131 @@
+{
+  "permissions": {
+    "allow": [],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(git push --force origin main)",
+      "Bash(git push --force origin master)",
+      "Bash(git reset --hard)",
+      "Bash(git checkout -- .)",
+      "Bash(git clean -fd)",
+      "Bash(git branch -D main)",
+      "Bash(git branch -D master)",
+      "Bash(curl * | bash)",
+      "Bash(wget * | bash)",
+      "Bash(chmod 777 *)",
+      "Bash(> /dev/sda*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-start.sh"
+          }
+        ],
+        "description": "セッション開始時にプロジェクト状態を表示"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/block-no-verify.sh"
+          }
+        ],
+        "description": "--no-verifyフラグをブロック"
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/block-config-edit.sh"
+          }
+        ],
+        "description": "linter/formatter設定変更をブロック"
+      },
+      {
+        "matcher": "tool == \"Write\" && tool_input.file_path matches \"\\\\.(md|txt)$\" && !(tool_input.file_path matches \"README\\\\.md|CLAUDE\\\\.md|AGENTS\\\\.md|CONTRIBUTING\\\\.md\")",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/block-unnecessary-docs.sh"
+          }
+        ],
+        "description": "不要ドキュメントファイル作成をブロック"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "tool == \"Edit\" && tool_input.file_path matches \"\\\\.(ts|tsx|js|jsx)$\"",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/auto-format.sh"
+          }
+        ],
+        "description": "編集後にPrettierで自動フォーマット"
+      },
+      {
+        "matcher": "tool == \"Edit\" && tool_input.file_path matches \"\\\\.(ts|tsx)$\"",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/typecheck.sh",
+            "timeout": 30
+          }
+        ],
+        "description": "TypeScript型チェック（TS系スタック選択時のみ）"
+      },
+      {
+        "matcher": "tool == \"Edit\" && tool_input.file_path matches \"\\\\.(ts|tsx|js|jsx)$\"",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/console-log-check.sh"
+          }
+        ],
+        "description": "console.logの残存チェック"
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "サブエージェントの出力品質を以下の4軸で10点満点で採点しろ:\n\n1. タスク完遂度: 割り当てられたタスクは100%完了しているか？\n2. コード品質: 型安全か？テストはあるか？可読性は十分か？\n3. 規約遵守: プロジェクトのコーディング規約に従っているか？\n4. スコープ遵守: タスク範囲外のことをしていないか？\n\n各項目を10点満点で採点し、8点未満の項目が1つでもあれば decision='block' で差し戻せ。\n差し戻し時は「何が弱いか」と「どう直すべきか」を具体的に指示しろ。\n全項目8点以上なら通過させろ。"
+          }
+        ],
+        "description": "品質ゲート: サブエージェント出力を4軸10点満点で採点（チーム運用時のみ）"
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/pre-compact.sh"
+          }
+        ],
+        "description": "コンテキスト圧縮前に状態を保存"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/stop-console-check.sh"
+          }
+        ],
+        "description": "Stop時にconsole.logの残存チェック"
+      }
+    ]
+  }
+}
